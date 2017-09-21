@@ -43,9 +43,9 @@ $sleep_providers
 ```
 
 ## Building
-To build the image, run this command
-```
-./build.sh push
-```
+* To build, run:    `make build IMAGE=YOUR_DOCKER_IMAGE_NAME`
+* To push, run:     `make push IMAGE=YOUR_DOCKER_IMAGE_NAME`
+* To do both, run:  `make all IMAGE=YOUR_DOCKER_IMAGE_NAME`
 
-Once done, login to opsweekly using the credentials `opsweekly:Opsw33kly!`
+## Accessing the site
+Once done, login to opsweekly using the credentials `opsweekly:Opsw33kly!` (or whatever credentials you have changed it to)
