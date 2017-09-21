@@ -8,26 +8,44 @@ Opsweekly can retrieve information from Jira, GitHub, Bitbucket, Pagerduty and s
 
 Opsweekly consists of two containers: one mariadb database and the application container (Apache + PHP 5).
 
-The Opsweekly container is built from scratch starting from Alpine Linux and Opsweekly source code (https://github.com/etsy/opsweekly). 
+The Opsweekly container is built from scratch starting from Alpine Linux and Opsweekly source code (https://github.com/etsy/opsweekly).
 
-![homepage](opsweekly-home.png)
+![homepage](doc/opsweekly-home.png)
 
-![update](opsweekly-update.png)
+![update](doc/opsweekly-update.png)
 
 ## More info
 ### Please visit <https://github.com/etsy/opsweekly/blob/master/screenshots/README.md> for a guided tour of how Opsweekly works and the reports it can generate!
 
 ## Requirements
 - docker
-- docker-compose
 
-## How to run it
-First change the configurations in `config.php` file, then start opsweekly executing:
+## Setup
+First, set these environment variables for the application:
 ```
-$  docker-compose up -d
+DB_HOST: <NOT_A_REAL_HOST>
+DB_PASSWORD: <NOT_A_REAL_PASSWORD>
+DB_USER: <NOT_A_REAL_USER>
+EMAIL_DOMAIN_ROOT: <NOT_A_REAL_EMAIL_DOMAIN_ROOT>
+HOSTNAME: <NOT_A_REAL_HOSTNAME>
+```
+
+Second, setup the .htpasswd file and change the credentials to what you want:
+```
+cp config/apache2/htpasswd.example config/apache/htpasswd
+```
+
+Third, change the following configuration areas in `config.php` file (more information can be found [here](https://github.com/etsy/opsweekly)):
+```
+$weekly_providers
+$oncall_providers
+$sleep_providers
+```
+
+## Building
+To build the image, run this command
+```
+./build.sh push
 ```
 
 Once done, login to opsweekly using the credentials `opsweekly:Opsw33kly!`
-
-* Default url: <http://opsweekly.mycompany.com/>, make sure to add an entry for it in your /etc/hosts to be resolved as localhost
-* NOTE: if you change the `$prod_fqdn` variable inside config.php with your domain, you need to change the team domain too.
