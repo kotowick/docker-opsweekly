@@ -6,10 +6,15 @@ $mysql_host = getenv('DB_HOST', true) ?: getenv('DB_HOST');
 $mysql_user = getenv('DB_USER', true) ?: getenv('DB_USER');
 $mysql_pass = getenv('DB_PASSWORD', true) ?: getenv('DB_PASSWORD');
 
+// Provider environment variables
+$pagerduty_api_key = getenv('PAGERDUTY_API_KEY', true) ?: getenv('PAGERDUTY_API_KEY');
+
 // The domain name your company uses to send email from, used for a reply-to address
 // for weekly reports
 $email_from_domain = getenv('EMAIL_DOMAIN_ROOT', true) ?: getenv('EMAIL_DOMAIN_ROOT');
+$email_report_to = getenv('REPORT_TO_EMAIL', true) ?: getenv('REPORT_TO_EMAIL');
 
+// General settings
 $hostname = getenv('HOSTNAME', true) ?: getenv('HOSTNAME');
 
 /**
@@ -51,15 +56,11 @@ $teams = array(
     $hostname => array(
       "root_url" => ".",
       "display_name" => "Ops",
-      "email_report_to" => "ops@sage.com",
+      "email_report_to" => $email_report_to,
       "database" => "opsweekly",
       "event_versioning" => "off",
       "oncall" => array(
-          "provider" => "splunk",
-          "provider_options" => array(
-              "splunk_index" => 'nagios',
-              "splunk_search" => 'contact="#logged_in_username#_pager"',
-          ),
+          "provider" => "pagerduty",
           "timezone" => "America/New_York",
           "start" => "friday 18:00",
           "end" => "friday 18:00",
@@ -90,7 +91,14 @@ $weekly_providers = array(
  * user received.
  **/
 $oncall_providers = array(
-
+  "pagerduty" => array(
+    "display_name" => "Pagerduty",
+    "lib" => "providers/oncall/pagerduty.php",
+    "options" => array(
+        "base_url" => "https://elsm.pagerduty.com/api/v1",
+        "apikey" => $pagerduty_api_key,
+    ),
+  ),
 );
 
 /**
