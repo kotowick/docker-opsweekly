@@ -33,7 +33,7 @@ function getUsername() {
 
 /**
  * Team configuration
- * Arrays of teams, the key being the Virtual Host FQDN, e.g. opsweekly.sage.com
+ * Arrays of teams, the key being the Virtual Host FQDN, e.g. someteam.somedomain.com
  *
  * Options:
  * display_name: Used for display purposes, your nice team name.
