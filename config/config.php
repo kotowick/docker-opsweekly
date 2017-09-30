@@ -17,19 +17,22 @@ $email_report_to = getenv('REPORT_TO_EMAIL', true) ?: getenv('REPORT_TO_EMAIL');
 // General settings
 $hostname = getenv('HOSTNAME', true) ?: getenv('HOSTNAME');
 
-/**
- * Authentication configuration
- * Nagdash must know who is requesting pages, as every update entry etc is unique
- * to a single person.
- * Therefore, you must define a function somewhere called getUsername()
- * that will return a plain text username string to Nagdash, e.g. "ldenness" or "bsmith"
- *
- **/
+//// START LOGIN
+$oauth_client_id = getenv('OAUTH2_CLIENT_ID', true) ?: getenv('OAUTH2_CLIENT_ID');
+$oauth_client_secret = getenv('OAUTH2_CLIENT_SECRET', true) ?: getenv('OAUTH2_CLIENT_SECRET');
 
-function getUsername() {
-    // Use the PHP_AUTH_USER header which contains the username when Basic auth is used.
-    return $_SERVER['PHP_AUTH_USER'];
-}
+// Github Authentication
+$authorizeURL = 'https://github.com/login/oauth/authorize';
+$tokenURL = 'https://github.com/login/oauth/access_token';
+$apiURLBase = 'https://api.github.com/';
+
+// Determine inbound protocol
+$protocol = getenv('PROTOCOL', true) ?: getenv('PROTOCOL');
+$protocol = $protocol . '://';
+
+session_start();
+checkAction();
+checkLogin();
 
 /**
  * Team configuration
@@ -142,3 +145,101 @@ $prod_fqdn = $hostname;
 // Global configuration for irccat, used to send messages to IRC about weekly meetings.
 $irccat_hostname = '';
 $irccat_port = 12345;
+
+
+/** CUSTOM AUTHENTICATION WITH GITHUB */
+
+/**
+ * Authentication configuration
+ * Nagdash must know who is requesting pages, as every update entry etc is unique
+ * to a single person.
+ * Therefore, you must define a function somewhere called getUsername()
+ * that will return a plain text username string to Nagdash, e.g. "ldenness" or "bsmith"
+ *
+ **/
+ function getUsername() {
+   // Use the PHP_AUTH_USER header which contains the username when Basic auth is used.
+   if(checkLogin()) {
+     $user = apiRequest($GLOBALS['apiURLBase'] . 'user');
+     return $user->name;
+   }
+ }
+
+// Check tha the user is logged in
+function checkLogin(){
+ if(session('access_token')) {
+   $user = apiRequest($GLOBALS['apiURLBase'] . 'user');
+   if (empty($user) || $user->name == ""){
+     header('Location: ' . $GLOBALS['protocol'] . $GLOBALS['hostname'] . '?action=login');
+     exit();
+   } else {
+     return true;
+   }
+ }
+ header('Location: ' . $GLOBALS['protocol'] . $GLOBALS['hostname'] . '?action=login');
+ exit;
+}
+
+// Make an api request to Github for authentication
+function apiRequest($url, $post=FALSE, $headers=array()) {
+  $ch = curl_init($url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+  if($post)
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
+
+  $headers[] = 'Accept: application/json';
+  if(session('access_token'))
+    $headers[] = 'Authorization: Bearer ' . session('access_token');
+    $headers[] = 'User-Agent: Awesome-Octocat-App';
+
+  curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+  $response = curl_exec($ch);
+  return json_decode($response);
+}
+
+// Method to retrieve a key in an array
+function get($key, $default=NULL) {
+  return array_key_exists($key, $_GET) ? $_GET[$key] : $default;
+}
+
+// Methid to initialize and update the session
+function session($key, $default=NULL) {
+  return array_key_exists($key, $_SESSION) ? $_SESSION[$key] : $default;
+}
+
+// Check for parameters
+function checkAction(){
+  // Start the login process by sending the user to Github's authorization page
+  if(get('action') == 'login') {
+    // Generate a random hash and store in the session for security
+    $_SESSION['state'] = hash('sha256', microtime(TRUE).rand().$_SERVER['REMOTE_ADDR']);
+    unset($_SESSION['access_token']);
+    $params = array(
+      'client_id' => $GLOBALS['oauth_client_id'],
+      'redirect_uri' => $GLOBALS['protocol'] . $_SERVER['SERVER_NAME'] . $_SERVER['PHP_SELF'],
+      'scope' => 'user',
+      'state' => $_SESSION['state']
+    );
+    // Redirect the user to Github's authorization page
+    header('Location: ' . $GLOBALS['authorizeURL'] . '?' . http_build_query($params));
+    die();
+  }
+  // When Github redirects the user back here, there will be a "code" and "state" parameter in the query string
+  if(get('code')) {
+    // Verify the state matches our stored state
+    if(!get('state') || $_SESSION['state'] != get('state')) {
+      header('Location: ' . $_SERVER['PHP_SELF']);
+      die();
+    }
+    // Exchange the auth code for a token
+    $token = apiRequest($GLOBALS['tokenURL'], array(
+      'client_id' => $GLOBALS['oauth_client_id'],
+      'client_secret' => $GLOBALS['oauth_client_secret'],
+      'redirect_uri' => $GLOBALS['protocol'] . $_SERVER['SERVER_NAME'] . $_SERVER['PHP_SELF'],
+      'state' => $_SESSION['state'],
+      'code' => get('code')
+    ));
+    $_SESSION['access_token'] = $token->access_token;
+    header('Location: ' . $_SERVER['PHP_SELF']);
+  }
+}
