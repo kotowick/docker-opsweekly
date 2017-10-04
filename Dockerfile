@@ -21,10 +21,10 @@ RUN apk del git \
 RUN postconf "smtputf8_enable = no" \
   && postfix start
 
-ADD   config/apache2/httpd.conf /etc/apache2/httpd.conf
-ADD   config/apache2/htpasswd /etc/htpasswd/.htpasswd
-ADD   config/config.php /var/www/opsweekly/phplib/config.php
-ADD   config/health_check/index.html /var/www/opsweekly/service/health/index.html
+ADD   apache/httpd.conf /etc/apache2/httpd.conf
+ADD   apache/htpasswd /etc/htpasswd/.htpasswd
+ADD   apache/health_check/index.html /var/www/opsweekly/service/health/index.html
+COPY  opsweekly/ /var/www/opsweekly/
 
 EXPOSE 80
 

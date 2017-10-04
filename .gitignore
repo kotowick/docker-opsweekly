@@ -1,2 +1,2 @@
-config/apache2/htpasswd
+apache/htpasswd
 .env

@@ -1,5 +1,6 @@
 <?php
 
+include_once('./providers/authentication/github.php');
 // Login details for the MySQL database, where all the data is stored.
 // The empty database schema is stored in opsweekly.sql
 $mysql_host = getenv('DB_HOST', true) ?: getenv('DB_HOST');
@@ -8,6 +9,9 @@ $mysql_pass = getenv('DB_PASSWORD', true) ?: getenv('DB_PASSWORD');
 
 // Provider environment variables
 $pagerduty_api_key = getenv('PAGERDUTY_API_KEY', true) ?: getenv('PAGERDUTY_API_KEY');
+$pagerduty_base_url = getenv('PAGERDUTY_BASE_URL', true) ?: getenv('PAGERDUTY_BASE_URL');
+$pagerduty_team_ids = getenv('PAGERDUTY_TEAM_IDS', true) ?: getenv('PAGERDUTY_TEAM_IDS');
+$pagerduty_include_options = getenv('PAGERDUTY_INCLUDE_OPTIONS', true) ?: getenv('PAGERDUTY_INCLUDE_OPTIONS');
 
 // The domain name your company uses to send email from, used for a reply-to address
 // for weekly reports
@@ -30,9 +34,35 @@ $apiURLBase = 'https://api.github.com/';
 $protocol = getenv('PROTOCOL', true) ?: getenv('PROTOCOL');
 $protocol = $protocol . '://';
 
+if ($pagerduty_api_key == '' || $pagerduty_base_url == '' ||
+    $pagerduty_team_ids == '' || $pagerduty_include_options == '' ||
+    $hostname == '' || $oauth_client_id == '' ||
+    $oauth_client_secret == '' || $mysql_host == '' || $mysql_user == '' ||
+    $mysql_pass == ''){
+      print "You are missing an environment variable. <br/>";
+      exit;
+    }
 session_start();
-checkAction();
-checkLogin();
+
+$authenticator->checkAction();
+$authenticator->checkLogin();
+
+/**
+ * Authentication configuration
+ * Nagdash must know who is requesting pages, as every update entry etc is unique
+ * to a single person.
+ * Therefore, you must define a function somewhere called getUsername()
+ * that will return a plain text username string to Nagdash, e.g. "ldenness" or "bsmith"
+ *
+ **/
+ function getUsername() {
+   global $authenticator;
+   // Use the PHP_AUTH_USER header which contains the username when Basic auth is used.
+   if($authenticator->checkLogin()) {
+     $user = $authenticator->apiRequest($GLOBALS['apiURLBase'] . 'user');
+     return $user->name;
+   }
+ }
 
 /**
  * Team configuration
@@ -64,7 +94,11 @@ $teams = array(
       "event_versioning" => "off",
       "oncall" => array(
           "provider" => "pagerduty",
-          "timezone" => "America/New_York",
+          "provider_options" => array(
+            "include" => explode(",", $pagerduty_include_options),
+            "team_ids" => explode(",", $pagerduty_team_ids),
+          ),
+          "timezone" => "PST",
           "start" => "friday 18:00",
           "end" => "friday 18:00",
       ),
@@ -96,9 +130,9 @@ $weekly_providers = array(
 $oncall_providers = array(
   "pagerduty" => array(
     "display_name" => "Pagerduty",
-    "lib" => "providers/oncall/pagerduty.php",
+    "lib" => "providers/oncall/pagerduty2.php",
     "options" => array(
-        "base_url" => "https://elsm.pagerduty.com/api/v1",
+        "base_url" => $pagerduty_base_url,
         "apikey" => $pagerduty_api_key,
     ),
   ),
@@ -145,101 +179,3 @@ $prod_fqdn = $hostname;
 // Global configuration for irccat, used to send messages to IRC about weekly meetings.
 $irccat_hostname = '';
 $irccat_port = 12345;
-
-
-/** CUSTOM AUTHENTICATION WITH GITHUB */
-
-/**
- * Authentication configuration
- * Nagdash must know who is requesting pages, as every update entry etc is unique
- * to a single person.
- * Therefore, you must define a function somewhere called getUsername()
- * that will return a plain text username string to Nagdash, e.g. "ldenness" or "bsmith"
- *
- **/
- function getUsername() {
-   // Use the PHP_AUTH_USER header which contains the username when Basic auth is used.
-   if(checkLogin()) {
-     $user = apiRequest($GLOBALS['apiURLBase'] . 'user');
-     return $user->name;
-   }
- }
-
-// Check tha the user is logged in
-function checkLogin(){
- if(session('access_token')) {
-   $user = apiRequest($GLOBALS['apiURLBase'] . 'user');
-   if (empty($user) || $user->name == ""){
-     header('Location: ' . $GLOBALS['protocol'] . $GLOBALS['hostname'] . '?action=login');
-     exit();
-   } else {
-     return true;
-   }
- }
- header('Location: ' . $GLOBALS['protocol'] . $GLOBALS['hostname'] . '?action=login');
- exit;
-}
-
-// Make an api request to Github for authentication
-function apiRequest($url, $post=FALSE, $headers=array()) {
-  $ch = curl_init($url);
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-  if($post)
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
-
-  $headers[] = 'Accept: application/json';
-  if(session('access_token'))
-    $headers[] = 'Authorization: Bearer ' . session('access_token');
-    $headers[] = 'User-Agent: Awesome-Octocat-App';
-
-  curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-  $response = curl_exec($ch);
-  return json_decode($response);
-}
-
-// Method to retrieve a key in an array
-function get($key, $default=NULL) {
-  return array_key_exists($key, $_GET) ? $_GET[$key] : $default;
-}
-
-// Methid to initialize and update the session
-function session($key, $default=NULL) {
-  return array_key_exists($key, $_SESSION) ? $_SESSION[$key] : $default;
-}
-
-// Check for parameters
-function checkAction(){
-  // Start the login process by sending the user to Github's authorization page
-  if(get('action') == 'login') {
-    // Generate a random hash and store in the session for security
-    $_SESSION['state'] = hash('sha256', microtime(TRUE).rand().$_SERVER['REMOTE_ADDR']);
-    unset($_SESSION['access_token']);
-    $params = array(
-      'client_id' => $GLOBALS['oauth_client_id'],
-      'redirect_uri' => $GLOBALS['protocol'] . $_SERVER['SERVER_NAME'] . $_SERVER['PHP_SELF'],
-      'scope' => 'user',
-      'state' => $_SESSION['state']
-    );
-    // Redirect the user to Github's authorization page
-    header('Location: ' . $GLOBALS['authorizeURL'] . '?' . http_build_query($params));
-    die();
-  }
-  // When Github redirects the user back here, there will be a "code" and "state" parameter in the query string
-  if(get('code')) {
-    // Verify the state matches our stored state
-    if(!get('state') || $_SESSION['state'] != get('state')) {
-      header('Location: ' . $_SERVER['PHP_SELF']);
-      die();
-    }
-    // Exchange the auth code for a token
-    $token = apiRequest($GLOBALS['tokenURL'], array(
-      'client_id' => $GLOBALS['oauth_client_id'],
-      'client_secret' => $GLOBALS['oauth_client_secret'],
-      'redirect_uri' => $GLOBALS['protocol'] . $_SERVER['SERVER_NAME'] . $_SERVER['PHP_SELF'],
-      'state' => $_SESSION['state'],
-      'code' => get('code')
-    ));
-    $_SESSION['access_token'] = $token->access_token;
-    header('Location: ' . $_SERVER['PHP_SELF']);
-  }
-}
