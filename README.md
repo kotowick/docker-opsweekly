@@ -19,16 +19,27 @@ The Opsweekly container is built from scratch starting from Alpine Linux and Ops
 
 ## Requirements
 - docker
+- mysql server/database
 
 ## Setup
 First, set these environment variables for the application:
 ```
-DB_HOST: <NOT_A_REAL_HOST>
-DB_PASSWORD: <NOT_A_REAL_PASSWORD>
-DB_USER: <NOT_A_REAL_USER>
-EMAIL_DOMAIN_ROOT: <NOT_A_REAL_EMAIL_DOMAIN_ROOT>
-HOSTNAME: <NOT_A_REAL_HOSTNAME>
+DB_HOST:                # database host url
+DB_PASSWORD:            # database user
+DB_USER:                # database password
+EMAIL_DOMAIN_ROOT:      # domain root to send outbound emails for reports
+HOSTNAME:               # the urn of the site (i.e domain name without the protocol)
+PAGERDUTY_API_KEY=      # the read-only api key you can generate from pagerduty
+PAGERDUTY_BASE_URL=https://api.pagerduty.com
+PAGERDUTY_TEAM_IDS=''   # comma seperated list
+PAGERDUTY_INCLUDE_OPTIONS='trigger_summary_data,users,services,first_trigger_log_entries,assignees,acknowledgers,priorities'
+REPORT_TO_EMAIL=''      # the email address to send the reports to
+OAUTH2_CLIENT_ID=       # client id from Github
+OAUTH2_CLIENT_SECRET=   # client secret from Github
+PROTOCOL=http           # http or https
 ```
+
+*Note*: you can copy the env.example file and edit the variables in there for local usage. Run `source <your env file name>` inside the container.
 
 Second, setup the .htpasswd file and change the credentials to what you want:
 ```
@@ -40,6 +51,17 @@ Third, change the following configuration areas in `config.php` file (more infor
 $weekly_providers
 $oncall_providers
 $sleep_providers
+```
+
+By default, I have included a custom Pagerduty weekly provider, and a Github authentication provider.
+
+## Database
+To initialize the tables in your database, run:
+
+```
+mysql> create database opsweekly;
+mysql> grant all on opsweekly.* to opsweekly_user@localhost IDENTIFIED BY 'my_password';
+mysql -u opsweekly_user opsweekly < opsweekly.sql
 ```
 
 ## Building

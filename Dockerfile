@@ -12,7 +12,8 @@ RUN cd /var/www/ \
   && chown apache:apache logs \
   && chmod g+w /var/log/apache2 \
   && addgroup apache wheel \
-  && mkdir -p /var/www/opsweekly/service/health
+  && mkdir -p /var/www/opsweekly/service/health \
+  && mkfifo /var/spool/postfix/public/pickup
 
 RUN apk del git \
   && rm -rf /var/cache/apk/* \
